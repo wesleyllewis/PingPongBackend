@@ -14,27 +14,45 @@ import play.api.mvc.BodyParsers._
 import play.api.libs.json.Json
 import play.api.libs.json.Json._
 
-object Application extends Controller{
-
-  //create an instance of the table]
-  val games = TableQuery[GamesTable]
+object Application extends Controller {
 
 
-  //JSON read/write macro
-  implicit val playersFormat = Json.format[Players]
+  val games = TableQuery[GameTable]
+
   implicit val gameFormat = Json.format[Game]
+  implicit val playerFormat = Json.format[Players]
 
+  def index = DBAction { implicit rs =>
+    Ok(views.html.index(games.list))
+  }
+
+  val gameForm = Form(
+    mapping(
+      "player_1" -> text(),
+      "score_1" -> text(),
+      "player_2" -> text(),
+      "score_2" -> text(),
+      "date" -> sqlDate,
+      "id" -> number
+    )(Game.apply)(Game.unapply)
+  )
+
+  def insert = DBAction { implicit rs =>
+    val game = gameForm.bindFromRequest.get
+    games.insert(game)
+
+    Redirect(routes.Application.index)
+  }
 
   def jsonFindAll = DBAction { implicit rs =>
     Ok(toJson(games.list))
   }
 
   def jsonInsert = DBAction(parse.json) { implicit rs =>
-    rs.request.body.validate[Players].map { players =>
-      val game = Game(players.player_1,players.player_2,players.score_1,players.score_2, Calendar.getInstance().getTime.toString)
+    rs.request.body.validate[Game].map { game =>
       games.insert(game)
-        Ok(toJson(game))
-    }.getOrElse(BadRequest("invalid json"))    
+      Ok(toJson(game))
+    }.getOrElse(BadRequest("invalid json"))
   }
 
 }
